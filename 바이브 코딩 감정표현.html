@@ -1,0 +1,249 @@
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>감정 파티클 게임</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+<style>
+  body { margin: 0; overflow: hidden; background: #141414; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
+<script>
+let bgColor = 20;
+let particles = [];
+let waves = [];
+let buttons = [];
+
+let emotionCount = {
+  happy: 0,
+  sad: 0,
+  angry: 0
+};
+
+let bgColors = {
+  neutral: [20, 20, 20],
+  happy: [255, 230, 100],
+  sad: [0, 100, 200],
+  angry: [255, 80, 0]
+};
+
+let targetBgColor = bgColors.neutral;
+let currentBgColor = [...targetBgColor];
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  noStroke();
+  createUI();
+  window.addEventListener('keydown', handleKeyDown);
+}
+
+function draw() {
+  for (let i = 0; i < 3; i++) {
+    currentBgColor[i] = lerp(currentBgColor[i], targetBgColor[i], 0.05);
+  }
+  background(currentBgColor);
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].update();
+    particles[i].show();
+    if (particles[i].isDead()) particles.splice(i, 1);
+  }
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      particles[i].interact(particles[j]);
+    }
+  }
+  for (let i = waves.length - 1; i >= 0; i--) {
+    waves[i].update();
+    waves[i].show();
+    if (waves[i].isDead()) waves.splice(i, 1);
+  }
+  buttons.forEach(btn => btn.animate());
+
+  showEmotionCounts();
+}
+
+function createUI() {
+  const pad = 8;
+  buttons = [
+    new FancyButton('H = 행복', pad, pad, color(255, 200, 0), () => triggerEmotion('happy')),
+    new FancyButton('S = 슬픔', pad + 180, pad, color(0, 180, 255), () => triggerEmotion('sad')),
+    new FancyButton('A = 화남', pad + 360, pad, color(255, 80, 0), () => triggerEmotion('angry')),
+    new FancyButton('Clear', pad + 540, pad, color(255), fadeReset),
+  ];
+}
+
+function triggerEmotion(type) {
+  emotionCount[type]++;
+  setTargetBgColor(type);
+  addParticles(type, random(width), random(height));
+}
+
+function setTargetBgColor(type) {
+  if (type === 'happy') targetBgColor = bgColors.happy;
+  else if (type === 'sad') targetBgColor = bgColors.sad;
+  else if (type === 'angry') targetBgColor = bgColors.angry;
+  else targetBgColor = bgColors.neutral;
+}
+
+class FancyButton {
+  constructor(label, x, y, txtColor, callback) {
+    this.label = label;
+    this.x = x;
+    this.y = y;
+    this.txtColor = txtColor;
+    this.callback = callback;
+    this.baseSize = 24;
+    this.hover = false;
+    this.scale = 1;
+  }
+  animate() {
+    let w = textWidth(this.label) + 40;
+    let h = this.baseSize + 20;
+    let isHover = mouseX > this.x && mouseX < this.x + w && mouseY > this.y && mouseY < this.y + h;
+    this.hover = isHover;
+
+    if (this.hover && this.scale < 1.1) this.scale += 0.07;
+    else if (!this.hover && this.scale > 1) this.scale -= 0.07;
+
+    push();
+    translate(this.x + w / 2, this.y + h / 2);
+    scale(this.scale);
+    translate(-(this.x + w / 2), -(this.y + h / 2));
+    fill(0, 0, 0, this.hover ? 200 : 150);
+    stroke(255);
+    strokeWeight(2);
+    rect(this.x, this.y, w, h, 12);
+
+    noStroke();
+    fill(this.txtColor);
+    textSize(this.hover ? this.baseSize + 4 : this.baseSize);
+    textStyle(BOLD);
+    textAlign(LEFT, TOP);
+    text(this.label, this.x + 20, this.y + 10);
+    pop();
+  }
+  checkClick() {
+    let w = textWidth(this.label) + 40;
+    let h = this.baseSize + 20;
+    if (mouseX > this.x && mouseX < this.x + w && mouseY > this.y && mouseY < this.y + h) {
+      this.callback();
+    }
+  }
+}
+
+function mousePressed() {
+  buttons.forEach(btn => btn.checkClick());
+}
+
+function handleKeyDown(e) {
+  if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'h') triggerEmotion('happy');
+  if (k === 's') triggerEmotion('sad');
+  if (k === 'a') triggerEmotion('angry');
+}
+
+function keyPressed() { handleKeyDown({ key: key, target: { tagName: '' } }); }
+
+function addParticles(type, x, y) {
+  for (let i = 0; i < 10; i++) {
+    particles.push(new Particle(type, x + random(-30, 30), y + random(-30, 30)));
+  }
+}
+
+function fadeReset() {
+  particles = [];
+  waves = [];
+  emotionCount = { happy: 0, sad: 0, angry: 0 };
+  targetBgColor = bgColors.neutral;
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+}
+
+function showEmotionCounts() {
+  fill(255);
+  noStroke();
+  textSize(20);
+  textAlign(LEFT, TOP);
+  text(`행복: ${emotionCount.happy}`, 16, height - 90);
+  text(`슬픔: ${emotionCount.sad}`, 16, height - 60);
+  text(`화남: ${emotionCount.angry}`, 16, height - 30);
+}
+
+class Particle {
+  constructor(type, x, y) {
+    this.type = type;
+    this.pos = createVector(x, y);
+    this.vel = createVector(random(-1, 1), random(-1, 1));
+    this.alpha = 255;
+    this.size = random(28, 44);
+    if (type === 'happy') this.emoji = '😊';
+    if (type === 'sad') this.emoji = '😢';
+    if (type === 'angry') this.emoji = '😡';
+  }
+  update() {
+    this.pos.add(this.vel);
+    this.alpha -= 3;
+    if (this.type === 'happy') this.vel.mult(1.05);
+    if (this.type === 'sad') this.vel.y += 0.15;
+    if (this.type === 'angry') this.vel.mult(1.2);
+  }
+  show() {
+    textSize(this.size);
+    textAlign(CENTER, CENTER);
+    fill(0, this.alpha);
+    text(this.emoji, this.pos.x + 1, this.pos.y + 2);
+    fill(255, this.alpha);
+    text(this.emoji, this.pos.x, this.pos.y);
+  }
+  isDead() {
+    return this.alpha <= 0;
+  }
+  interact(other) {
+    let d = dist(this.pos.x, this.pos.y, other.pos.x, other.pos.y);
+    if (d < (this.size + other.size) / 2) {
+      if (this.type === 'angry' || other.type === 'angry') {
+        let angle = atan2(other.pos.y - this.pos.y, other.pos.x - this.pos.x);
+        this.vel.add(p5.Vector.fromAngle(angle).mult(-0.5));
+        other.vel.add(p5.Vector.fromAngle(angle).mult(0.5));
+      }
+      if (this.type === 'happy' && other.type === 'happy') {
+        this.size = min(this.size + 0.5, 60);
+        other.size = min(other.size + 0.5, 60);
+      }
+    }
+  }
+}
+
+class Wave {
+  constructor(x, y, r) {
+    this.pos = createVector(x, y);
+    this.r = r;
+    this.alpha = 120;
+  }
+  update() {
+    this.r += 2;
+    this.alpha -= 3;
+  }
+  show() {
+    noFill();
+    stroke(0, 150, 255, this.alpha);
+    strokeWeight(2);
+    ellipse(this.pos.x, this.pos.y, this.r * 2);
+  }
+  isDead() {
+    return this.alpha <= 0;
+  }
+}
+</script>
+
+</body>
+</html>
